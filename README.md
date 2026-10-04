@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://cdn.simpleicons.org/githubcopilot" alt="GitHub Copilot" width="72" height="72" />
+</p>
+
 <h1 align="center">Copilot AutoHarness</h1>
 <p align="center"><strong>A skills layer for GitHub Copilot CLI that learns, and answers to you</strong></p>
 
