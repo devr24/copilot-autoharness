@@ -22,7 +22,7 @@ class SkillUsageTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
-        self.root = Path(self.tmp.name)
+        self.root = Path(self.tmp.name).resolve()
 
     def test_parses_only_skill_invoked_records(self):
         path = self.root / "events.jsonl"

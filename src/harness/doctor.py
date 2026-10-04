@@ -1,6 +1,7 @@
 import json
 import os
 import shutil
+import sys
 from pathlib import Path
 
 from .config import Config
@@ -44,7 +45,7 @@ def run_checks(config: Config, cwd: Path) -> list[tuple[str, bool, str]]:
 
     harness = shutil.which("harness")
     # Copilot spawns hook commands without a shell, so Windows shims (.cmd/.bat) do not work.
-    if harness and os.name == "nt" and not harness.lower().endswith(".exe"):
+    if harness and sys.platform == "win32" and not harness.lower().endswith(".exe"):
         checks.append(("harness executable", False, f"{harness} is not an .exe; hooks cannot spawn it"))
     elif harness:
         checks.append(("harness executable", True, harness))

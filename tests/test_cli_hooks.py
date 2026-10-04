@@ -16,7 +16,7 @@ from harness.storage import Event, Storage
 class SessionEndHookTests(unittest.TestCase):
     def test_session_end_hook_auto_creates_skill(self):
         with TemporaryDirectory() as directory:
-            root = Path(directory)
+            root = Path(directory).resolve()
             project = root / "repo"
             home = root / "harness-state"
             project.mkdir()

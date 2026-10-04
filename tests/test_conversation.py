@@ -181,7 +181,7 @@ class AgentStopTriggerTests(unittest.TestCase):
         from harness.cli import _handle
 
         with TemporaryDirectory() as directory:
-            root = Path(directory)
+            root = Path(directory).resolve()
             project = root / "repo"
             home = root / "home"
             project.mkdir(), home.mkdir()

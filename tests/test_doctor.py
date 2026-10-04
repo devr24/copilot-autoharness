@@ -32,7 +32,7 @@ class DoctorTests(unittest.TestCase):
         self.assertFalse(result["configuration"][0])
 
     def test_windows_shim_rejected(self):
-        with mock.patch("shutil.which", return_value="C:\\bin\\harness.cmd"), mock.patch("os.name", "nt"):
+        with mock.patch("shutil.which", return_value="C:\\bin\\harness.cmd"), mock.patch("sys.platform", "win32"):
             self.assertFalse(self.checks()["harness executable"][0])
 
     def test_repo_hooks_detected(self):
