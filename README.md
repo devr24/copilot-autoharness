@@ -34,7 +34,7 @@ Python standard library. Copilot spawns hooks without a shell, so `harness` must
 executable (`harness.exe` on Windows), not a `.cmd` shim.
 
 ```powershell
-py -m pip install .                  # provides harness on PATH (python3 -m pip on Linux/macOS)
+py -m pip install git+https://github.com/devr24/copilot-autoharness.git   # provides harness on PATH (python3 -m pip on Linux/macOS)
 harness config init                  # explicit opt-in to automatic learning
 copilot plugin marketplace add devr24/copilot-autoharness
 copilot plugin install copilot-harness@copilot-harness-marketplace
@@ -60,7 +60,7 @@ warns about double installation.
 ### Update
 
 ```powershell
-git pull; py -m pip install .
+py -m pip install --upgrade --force-reinstall git+https://github.com/devr24/copilot-autoharness.git
 copilot plugin marketplace update copilot-harness-marketplace
 copilot plugin update copilot-harness@copilot-harness-marketplace
 ```

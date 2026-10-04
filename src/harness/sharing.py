@@ -148,6 +148,7 @@ _SIGNERS = """# One line per approved publisher: <identity> <key-type> <public-k
 """
 
 FILES = {
+    ".gitattributes": "* text=auto eol=lf\n",
     "README.md": _README,
     "harness-policy.json": _POLICY,
     "allowed_signers": _SIGNERS,
