@@ -10,6 +10,7 @@ from typing import Any
 from . import __version__
 from .debug import DEBUG_LOG_NAME, debug_enabled, debug_exception, debug_log, tail_debug_log
 from .audit import audit_skills
+from .policy import enforce_policy, find_policy, load_policy, sign_export, verify_signature
 from .background import (
     last_reflection_log,
     log_reflection,
@@ -116,6 +117,13 @@ def _parser() -> argparse.ArgumentParser:
         "audit", help="Check a directory of exported skills for tampering, secrets, injection and duplicates."
     )
     audit_parser.add_argument("directory", type=Path, help="Directory containing exported skill folders.")
+    audit_parser.add_argument("--policy", type=Path, help="Policy file (default: harness-policy.json found in the current or parent directory).")
+    sign_parser = commands.add_parser("sign", help="Sign a skill export's provenance.json with an SSH key.")
+    sign_parser.add_argument("directory", type=Path)
+    sign_parser.add_argument("--key", type=Path, required=True, help="SSH private key (ssh-keygen -t ed25519).")
+    verify_sig_parser = commands.add_parser("verify-signature", help="Verify an export signature against an allowed_signers file.")
+    verify_sig_parser.add_argument("directory", type=Path)
+    verify_sig_parser.add_argument("--allowed-signers", type=Path, required=True)
     govern_parser = commands.add_parser(
         "govern", help="Record owner, criticality and review expiry for a skill (required to share risky skills)."
     )
@@ -135,6 +143,7 @@ def _parser() -> argparse.ArgumentParser:
     )
     import_parser.add_argument("directory", type=Path)
     import_parser.add_argument("--scope", choices=("project", "personal"), default="project")
+    import_parser.add_argument("--policy", type=Path, help="Policy file (default: harness-policy.json in the current directory).")
     shared_init_parser = commands.add_parser(
         "shared-init", help="Scaffold a shared-skills repository with CI verification and review templates."
     )
@@ -495,7 +504,11 @@ def _handle(args: argparse.Namespace) -> int:
         print("Note: the local hash manifest is unsigned and does not authenticate its publisher.")
         return 0
     if args.command == "audit":
-        count, findings = audit_skills(args.directory)
+        policy_path = args.policy or find_policy(Path.cwd(), args.directory.resolve().parent)
+        policy = load_policy(policy_path) if policy_path else None
+        if policy:
+            print(f"Using policy {policy.path}")
+        count, findings = audit_skills(args.directory, policy)
         for finding in findings:
             print(f"{finding.skill}: [{finding.check}] {finding.detail}")
         print(f"Audited {count} skill(s): {len(findings)} finding(s).")
@@ -504,10 +517,21 @@ def _handle(args: argparse.Namespace) -> int:
         path = set_governance(args.name, args.scope, cwd, args.owner, args.criticality, args.expires)
         print(f"Recorded governance for {args.scope} skill {args.name}: {path}")
         return 0
+    if args.command == "sign":
+        print(f"Signed: {sign_export(args.directory, args.key)}")
+        return 0
+    if args.command == "verify-signature":
+        print(f"Signature verified for signer: {verify_signature(args.directory, args.allowed_signers)}")
+        return 0
     if args.command in {"share", "import"}:
         if args.command == "share":
             proposal = share_proposal(args.name, args.source, args.target, cwd)
         else:
+            policy_path = args.policy or find_policy(cwd)
+            if policy_path:
+                policy = load_policy(policy_path)
+                verify_export(args.directory)
+                enforce_policy(args.directory, policy)
             proposal = import_proposal(args.directory, args.scope, cwd)
         storage.add_proposal(proposal, str(cwd), datetime.now(UTC).isoformat())
         print("Proposal created (nothing installed yet):")

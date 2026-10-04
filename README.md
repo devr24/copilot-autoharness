@@ -238,7 +238,8 @@ harness shadow <skill> | --proposal <id> [--baseline-version N] [--cases DIR]
 harness govern <skill> --owner O --criticality C --expires YYYY-MM-DD
 harness export <skill> --scope S --to <dir>        harness verify <dir>
 harness import <dir> [--scope S]          harness share <skill> --from S --to S
-harness shared-init <dir>                 harness audit <dir>
+harness shared-init <dir>                 harness audit <dir> [--policy FILE]
+harness sign <dir> --key K                harness verify-signature <dir> --allowed-signers F
 harness eval [--only NAME]
 ```
 
@@ -255,9 +256,10 @@ Details and examples: [docs/reference.md](docs/reference.md).
   pass is evidence, not proof. Conflict detection is a word-overlap heuristic.
 - Sensitive-content classification is keyword-based, not a security review. Probation does not stop Copilot
   loading a skill — don't put unreviewed high-impact instructions in one.
-- Exports and governance metadata are unsigned hash manifests: they catch unreviewed edits, not a malicious
-  publisher. The pull-request review in the shared repo is the real control.
-- Not yet available: signing and attestation, organisation marketplace and policy pinning, a dashboard. The
+- Exports are unsigned by default. Optional SSH-key signatures (`harness sign`) prove a manifest came from a key in
+  your `allowed_signers`, but the checks are advisory aids: the pull-request review in the shared repo is the
+  real control. Policy files are plain JSON checked in with the skills, so protect them with code owners too.
+- Not yet available: build-provenance attestation, an organisation marketplace, a dashboard. The
   detached reflection process still needs broader live cross-platform validation.
 
 ## Roadmap
@@ -270,8 +272,8 @@ export/import, a shared-repo scaffold with CI verification, and CI on Windows, L
 repeated runs, and live validation of detached reflection on
 macOS and Linux.
 
-**Then — organisation rollout.** Signing and attestation, an organisation marketplace pinned by policy, a
-deny list, and org-tier labels in the session-start index.
+**Then — organisation rollout.** Build-provenance attestation, an organisation marketplace pinned by the policy
+file, and org-tier labels in the session-start index.
 
 **Later.** A dashboard and any shared telemetry — only once the governance model is agreed.
 See the [enterprise promotion design](docs/enterprise.md).

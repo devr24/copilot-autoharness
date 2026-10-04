@@ -74,6 +74,12 @@ harness accept <proposal-id>
 Importing re-verifies the hash and creates a pending proposal; nothing is installed until you accept it.
 Accepted skills start in probation like any other.
 
+## Policy and signing
+
+`harness-policy.json` is enforced by `harness audit` in CI and by `harness import`: a deny list (names and
+content hashes), an owner allowlist, a maximum criticality, required governance, and optional required
+signatures from the keys in `allowed_signers`. Sign with `harness sign skills/<skill> --key <ssh-key>`.
+
 ## Limits
 
 `provenance.json` is an unsigned hash manifest. It detects accidental or unreviewed edits to `SKILL.md`,
@@ -81,8 +87,28 @@ not a malicious change that also rewrites the hash, so the pull-request review i
 Branch protection and code owners must be enabled on this repository.
 """
 
+_POLICY = """{
+  "format_version": 1,
+  "deny_names": [],
+  "deny_sha256": [],
+  "allowed_owners": [],
+  "max_criticality": null,
+  "require_governance": false,
+  "require_signature": false,
+  "allowed_signers": "allowed_signers"
+}
+"""
+
+_SIGNERS = """# One line per approved publisher: <identity> <key-type> <public-key>
+# e.g. skills-team@example.com ssh-ed25519 AAAA...
+# Then set "require_signature": true in harness-policy.json and have publishers run
+#   harness sign skills/<skill> --key <private-key>
+"""
+
 FILES = {
     "README.md": _README,
+    "harness-policy.json": _POLICY,
+    "allowed_signers": _SIGNERS,
     "skills/.gitkeep": "",
     ".github/workflows/verify-skills.yml": _WORKFLOW,
     ".github/CODEOWNERS": _CODEOWNERS,

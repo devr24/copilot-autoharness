@@ -1,11 +1,13 @@
 # Enterprise skill promotion: design
 
 Status: **local sharing mechanics are implemented; organisation distribution, signing and policy are
-design-only.** Implemented: trusted-skill export and unsigned hash verification, owner / criticality /
+design-only.** Implemented: trusted-skill export and hash verification, optional SSH-key signatures
+(`harness sign`), an organisation policy file (deny list, owner allowlist, criticality cap, required
+governance and signatures), owner / criticality /
 expiry metadata (`harness govern`), a shared-repository scaffold with CI verification and review
 templates (`harness shared-init`), review-gated import and cross-scope sharing (`harness import`,
-`harness share`), and shadow evaluation (`harness shadow`). Not implemented: signing, attestation,
-organisation marketplace and policy pinning, deny lists, telemetry.
+`harness share`), and shadow evaluation (`harness shadow`). Not implemented: build attestation,
+organisation marketplace, telemetry.
 
 ## Problem
 
@@ -77,12 +79,22 @@ nothing is installed until `harness accept`, and accepted skills start in probat
 <skill> --from personal --to project` does the same across local scopes for a trusted skill.
 
 `harness audit <dir>` runs these checks and exits 1 on any finding: hash/manifest verification and
-expiry, secret-like content, prompt-injection phrases (overriding instructions, revealing secrets,
+expiry, policy (below), secret-like content, prompt-injection phrases (overriding instructions, revealing secrets,
 piping downloads into a shell, hiding actions from the user, bypassing review, hidden bidirectional
 characters), a 20 KB size limit, and near-duplicate descriptions between skills. The scaffolded
 workflow runs `harness audit skills`. Still to build: diffs of changed skills and name collisions
-against an existing org catalogue. The checks are heuristics, so humans remain the control. The wider
-planned checks are:
+against an existing org catalogue. The checks are heuristics, so humans remain the control. **Policy and signing.** `harness-policy.json` (scaffolded by `shared-init`, found in the current directory,
+`.github/`, or beside the audited folder, or passed with `--policy`) holds `deny_names`, `deny_sha256`,
+`allowed_owners`, `max_criticality`, `require_governance`, `require_signature` and an `allowed_signers`
+path. It is enforced by `harness audit` (as `[policy]` findings) and by `harness import` (which refuses
+before creating a proposal). Publishers sign with `harness sign <dir> --key <ssh-private-key>`, which uses
+`ssh-keygen -Y sign` over `provenance.json` (the manifest contains the `SKILL.md` hash), and consumers check
+with `harness verify-signature <dir> --allowed-signers <file>`; an `allowed_signers` file lists approved
+identities and public keys in the standard OpenSSH format. This needs OpenSSH 8.2+ `ssh-keygen` on PATH.
+Signatures prove key possession, not that the content is safe; revoke by removing a key or adding a hash
+to the deny list.
+
+The wider planned checks are:
 
 Run on every PR: `validate_skill`; secret/redaction scan; keyword risk classifier; a prompt-injection
 check (flag instructions that mention exfiltration, disabling safeguards, fetching remote

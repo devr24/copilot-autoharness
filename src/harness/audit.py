@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .errors import HarnessError
+from .policy import Policy, check_policy
 from .redaction import redact_text
 from .shadow import detect_conflicts
 from .skills import verify_export
@@ -45,8 +46,8 @@ def scan_text(body: str) -> list[tuple[str, str]]:
     return found
 
 
-def audit_skills(root: Path) -> tuple[int, list[Finding]]:
-    """Audit every skill directory under `root`: hash, secrets, injection phrases, duplicates."""
+def audit_skills(root: Path, policy: Policy | None = None) -> tuple[int, list[Finding]]:
+    """Audit every skill directory under `root`: hash, policy, secrets, injection phrases, duplicates."""
     if not root.is_dir():
         raise HarnessError(f"Not a directory: {root}")
     directories = sorted(p for p in root.iterdir() if p.is_dir() and not p.name.startswith("."))
@@ -61,6 +62,8 @@ def audit_skills(root: Path) -> tuple[int, list[Finding]]:
             continue
         body = (directory / "SKILL.md").read_text(encoding="utf-8")
         bodies[name] = body
+        if policy:
+            findings.extend(Finding(name, "policy", problem) for problem in check_policy(directory, policy))
         findings.extend(Finding(name, check, detail) for check, detail in scan_text(body))
     for name, body in bodies.items():
         others = [{"scope": "shared", "name": n, "content": b} for n, b in bodies.items() if n > name]
