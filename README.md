@@ -1,31 +1,46 @@
 <h1 align="center">Copilot AutoHarness</h1>
-<p align="center"><strong>Self-Learning Skills for GitHub Copilot CLI</strong></p>
+<p align="center"><strong>A skills layer for GitHub Copilot CLI that learns, and answers to you</strong></p>
 
 <p align="center">
-  <a href="https://github.com/devr24/copilot-autoharness/actions/workflows/ci.yml"><img src="https://github.com/devr24/copilot-autoharness/actions/workflows/ci.yml/badge.svg" alt="CI" /></a> <img src="https://img.shields.io/badge/release-v0.1.0-brightgreen.svg" alt="release" /> <img src="https://img.shields.io/badge/python-3.11%2B-blue.svg" alt="python" /> <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey.svg" alt="platform" /> <img src="https://img.shields.io/badge/license-MIT-yellow.svg" alt="license MIT" />
+  <a href="https://github.com/devr24/copilot-autoharness/actions/workflows/ci.yml"><img src="https://github.com/devr24/copilot-autoharness/actions/workflows/ci.yml/badge.svg" alt="CI" /></a> <a href="https://github.com/devr24/copilot-autoharness/releases"><img src="https://img.shields.io/github/v/release/devr24/copilot-autoharness?label=release" alt="release" /></a> <img src="https://img.shields.io/badge/python-3.11%20%7C%203.13%20tested-blue.svg" alt="python" /> <img src="https://img.shields.io/badge/CI%20runs%20on-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey.svg" alt="CI platforms" /> <img src="https://img.shields.io/badge/license-MIT-yellow.svg" alt="license MIT" />
 </p>
 
-**Copilot AutoHarness is a self-learning skill layer for GitHub Copilot CLI.** It **learns** skills from your
-real sessions, **merges** near-duplicates instead of stacking them, **versions** every change, and keeps
-**humans in control of risky knowledge** — all as native Copilot Agent Skills, **touching only the skills
-it wrote itself**.
+Copilot works out useful things during a session — how this repo builds, which flag breaks the linter, the
+order a release has to happen in — and then forgets them. **Copilot AutoHarness turns those lessons into
+native Copilot Agent Skills, in the background, and puts every one of them under version control, review
+and rollback.** It only ever edits skills it wrote itself.
 
-It is the Copilot analogue of [tigerless-labs/autoharness](https://github.com/tigerless-labs/autoharness),
-rebuilt on Copilot CLI's documented hooks and native skills. Same idea — the harness around the model
-matters, and one slice of it, the skill layer, can maintain itself — with a stronger emphasis on
-provenance, trust states and rollback.
+It is a Copilot CLI take on [tigerless-labs/autoharness](https://github.com/tigerless-labs/autoharness),
+which does this for Claude Code. The learning loop follows the same idea; this project is built on Copilot's
+hooks and skills instead, and puts its weight on governance: trust states, shadow testing, and moving skills
+between teams through a reviewed repository.
 
-| | |
-|---|---|
-| **Learns from real work** | Each episode is distilled from the session you were already having — your prompts, Copilot's replies and tool activity. It fires on its own once a session has done enough work; `harness learn --now` distills on demand. |
-| **Groups, doesn't just pile up** | The reflector sees an index of existing skills and can `patch` instead of `create`. A periodic curator folds near-duplicates under one skill; absorbed skills are archived with `merged_into` recorded, so a merge is never mistaken for a deletion. |
-| **Keeps its own library in view** | Every session opens with an index of the skills it wrote (trusted first, capped), injected through the `sessionStart` hook. Copilot's own skill recall is left untouched. |
-| **Humans gate risky knowledge** | Low-risk skills enter *probation*. Anything touching production, deployment, IAM, secrets, data migration or destructive steps is held until you `harness accept` it. |
-| **Provenance, versions, rollback** | Every skill records its source session, reason, creator, validation result and Harness version. Previous bodies are versioned with SHA-256 digests and can be rolled back, quarantined or archived. |
-| **Validated before trusted** | `harness shadow` replays task cases against a revision and its predecessor and reports regressions and likely conflicts, without touching the live skill. |
-| **Shared through review** | Trusted skills carry an owner, criticality and expiry, export with minimised provenance, and move between teams via a CI-verified, code-owner-reviewed repository. Imports only ever create a pending proposal. |
-| **Only its own skills** | Create never overwrites; patch, trust, quarantine, archive and rollback require Harness ownership metadata. Skills you wrote or installed are never touched. |
-| **Local-first, no daemon** | State lives in a local SQLite file. Hooks start short-lived processes; there is no resident service and no telemetry. |
+### What you get
+
+**Learning**
+- **Distilled from real work.** Skills come from the session you were already having. Nothing extra to run;
+  `harness learn --now` captures a lesson on demand.
+- **Merged, not piled up.** The reflector can `patch` an existing skill instead of adding a new one, and a
+  periodic curator folds near-duplicates. Absorbed skills are archived with `merged_into` recorded.
+- **Visible at session start.** A capped index of the skills Harness wrote is injected through the
+  `sessionStart` hook. Copilot's own skill recall is left alone.
+
+**Control**
+- **Risky knowledge waits for you.** Low-risk skills start in *probation*. Anything touching production,
+  deployment, IAM, secrets, data migration or destructive steps is held until you `harness accept` it.
+- **Every change is traceable.** Source session, reason, creator, validation result and Harness version are
+  recorded; old bodies are kept with SHA-256 digests for rollback, quarantine or archive.
+- **Tested before trusted.** `harness shadow` replays task cases against a revision and its predecessor and
+  flags regressions and likely conflicts, without touching the live skill.
+- **Your skills are off limits.** Create never overwrites; patch, trust, quarantine, archive and rollback
+  require Harness ownership metadata.
+
+**Sharing**
+- **Reviewed, not broadcast.** Trusted skills carry an owner, criticality and expiry and move between teams
+  through a CI-checked, code-owner-reviewed repository, with optional signatures, an org policy file and
+  build attestation. Imports only ever create a pending proposal.
+- **Local-first.** State is a local SQLite file. Hooks start short-lived processes; there is no daemon and no
+  telemetry.
 
 ## Install
 
@@ -144,7 +159,7 @@ Copilot CLI hooks ─► CAP capture ─► SQLite (redacted) ─► REF reflect
 | **LED** · ledger | Per-skill append-only `.ledger.jsonl`: why each skill was born or changed, with evidence IDs. Kept out of the `SKILL.md` body so recall stays clean. |
 | **feedback / export** | Explicit, version-bound `helpful`/`not-helpful` ratings, and hash-checked export of trusted skills with minimised provenance. Both are local; neither changes trust automatically. |
 
-## Walkthrough: watching it learn
+## Try it end to end
 
 Everything lands on disk as plain files, so a demo is just opening them in order. To speed up the loop,
 lower the threshold in `config.toml`:
@@ -260,9 +275,10 @@ Details and examples: [docs/reference.md](docs/reference.md).
 - Exports are unsigned by default. Optional SSH-key signatures (`harness sign`) prove a manifest came from a key in
   your `allowed_signers`, but the checks are advisory aids: the pull-request review in the shared repo is the
   real control. Policy files are plain JSON checked in with the skills, so protect them with code owners too.
-- Not yet available: an organisation marketplace and a dashboard. Attestation needs GitHub and the `gh` CLI, and
-  has only been unit-tested with a mocked `gh`, not against a live release. The
-  detached reflection process still needs broader live cross-platform validation.
+- Not yet available: an organisation marketplace and a dashboard. Attestation needs GitHub and the `gh` CLI; it
+  was verified end to end on a scratch repository (build, attest, verify, tamper rejection) but has not been
+  run in a production organisation. The detached reflection process has been exercised mainly on Windows;
+  Linux and macOS currently have unit-test coverage in CI only.
 
 ## Roadmap
 
