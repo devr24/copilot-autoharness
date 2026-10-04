@@ -1,0 +1,9 @@
+{
+  "name": "example-build-workflow",
+  "skill": "build-workflow",
+  "task": "I changed a Python module in this repository. How should I check it before committing?",
+  "expect": {
+    "must_include": ["unittest"],
+    "must_exclude": ["--no-verify"]
+  }
+}

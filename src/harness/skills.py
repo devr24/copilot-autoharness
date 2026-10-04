@@ -5,7 +5,8 @@ import os
 import re
 import shutil
 import tempfile
-from datetime import UTC, datetime
+import uuid
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -578,10 +579,156 @@ def trust_skill(name: str, scope: str, cwd: Path) -> Path:
     return directory
 
 
+CRITICALITY_LEVELS = ("low", "medium", "high", "critical")
+
+
+def _parse_expiry(value: Any) -> date:
+    try:
+        return date.fromisoformat(str(value))
+    except ValueError as exc:
+        raise HarnessError(f"Invalid expiry date {value!r}; use YYYY-MM-DD.") from exc
+
+
+def _governance_problem(governance: Any) -> str | None:
+    """Return why governance metadata blocks sharing, or None when it is acceptable."""
+    if not isinstance(governance, dict):
+        return "no governance metadata"
+    if not str(governance.get("owner", "")).strip():
+        return "no owner"
+    if governance.get("criticality") not in CRITICALITY_LEVELS:
+        return "no valid criticality"
+    try:
+        expires = _parse_expiry(governance.get("expires"))
+    except HarnessError:
+        return "no valid expiry date"
+    if expires < datetime.now(UTC).date():
+        return f"review expired on {expires.isoformat()}"
+    return None
+
+
+def set_governance(
+    name: str, scope: str, cwd: Path, owner: str, criticality: str, expires: str
+) -> Path:
+    directory, metadata, _ = inspect_skill(name, scope, cwd)
+    owner = " ".join(owner.split())
+    if not owner or len(owner) > 100:
+        raise HarnessError("Owner must be 1-100 characters.")
+    if redact_text(owner) != owner:
+        raise HarnessError("Owner looks like it contains a secret.")
+    if criticality not in CRITICALITY_LEVELS:
+        raise HarnessError(f"Criticality must be one of: {', '.join(CRITICALITY_LEVELS)}.")
+    if _parse_expiry(expires) < datetime.now(UTC).date():
+        raise HarnessError("Expiry date must not be in the past.")
+    timestamp = datetime.now(UTC).isoformat()
+    metadata["governance"] = {
+        "owner": owner,
+        "criticality": criticality,
+        "expires": expires,
+        "set_at": timestamp,
+        "set_by": getpass.getuser(),
+    }
+    metadata["updated_at"] = timestamp
+    _atomic_write(directory / ".sidecar.json", _sidecar(metadata))
+    _append_ledger(
+        directory,
+        {
+            "action": "govern",
+            "timestamp": timestamp,
+            "version": metadata.get("version", 1),
+            "performed_by": getpass.getuser(),
+            "reason": f"owner={owner}, criticality={criticality}, expires={expires}",
+        },
+    )
+    return directory
+
+
+def read_version(name: str, scope: str, cwd: Path, version: int) -> str:
+    """Return a saved skill body after verifying its SHA-256 digest."""
+    version_dir = _version_root(scope, cwd, name) / f"{version:06d}"
+    version_file = version_dir / "SKILL.md"
+    version_meta = version_dir / "metadata.json"
+    if version_dir.is_symlink() or version_file.is_symlink() or version_meta.is_symlink():
+        raise HarnessError("Refusing to read a symlinked version.")
+    try:
+        body = version_file.read_text(encoding="utf-8")
+        prior = json.loads(version_meta.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise HarnessError(f"Skill version not found or unreadable: {version}") from exc
+    if not isinstance(prior, dict) or prior.get("sha256") != hashlib.sha256(body.encode("utf-8")).hexdigest():
+        raise HarnessError(f"Version {version} failed its integrity check.")
+    return body
+
+
+def _body_description(name: str, body: str) -> str:
+    frontmatter = _FRONTMATTER.match(body)
+    description = _DESCRIPTION.search(frontmatter.group(1)) if frontmatter else None
+    if not description:
+        raise HarnessError(f"Skill description is missing from {name}.")
+    return description.group(1).strip().strip("\"'")
+
+
+def _review_proposal(name: str, scope: str, body: str, reason: str, cwd: Path) -> dict[str, Any]:
+    body = validate_skill(name, _body_description(name, body), body)
+    return {
+        "id": str(uuid.uuid4()),
+        "action": "create",
+        "scope": scope,
+        "name": name,
+        "description": _body_description(name, body),
+        "reason": reason,
+        "confidence": 1.0,
+        "risk_level": classify_risk(name, _body_description(name, body), reason, body),
+        "skill_md": body,
+        "evidence": [],
+        "source_session_ids": [],
+        "absorbs": [],
+        "cwd": str(cwd),
+    }
+
+
+def share_proposal(name: str, source_scope: str, target_scope: str, cwd: Path) -> dict[str, Any]:
+    """Build a pending proposal copying a trusted skill into another scope for human review."""
+    if source_scope == target_scope:
+        raise HarnessError("Source and target scope must differ.")
+    _, metadata, body = inspect_skill(name, source_scope, cwd)
+    if metadata.get("trust_state", metadata.get("status")) != "trusted":
+        raise HarnessError(f"Only trusted skills can be shared across scopes: {name}")
+    root, _ = skill_roots(target_scope, cwd)
+    if (root / name).exists():
+        raise HarnessError(f"A {target_scope} skill named {name} already exists.")
+    return _review_proposal(
+        name, target_scope, body, f"Shared from trusted {source_scope} skill (version {metadata.get('version', 1)}).", cwd
+    )
+
+
+def import_proposal(directory: Path, scope: str, cwd: Path) -> dict[str, Any]:
+    """Verify a skill export and build a pending proposal; importing never installs directly."""
+    digest = verify_export(directory)
+    body = (directory / "SKILL.md").read_text(encoding="utf-8")
+    name = directory.name
+    root, _ = skill_roots(scope, cwd)
+    if (root / name).exists():
+        raise HarnessError(f"A {scope} skill named {name} already exists.")
+    return _review_proposal(
+        name, scope, body, f"Imported from a verified skill export (sha256 {digest[:12]}).", cwd
+    )
+
+
 def export_skill(name: str, scope: str, cwd: Path, destination: Path) -> Path:
     _, metadata, body = inspect_skill(name, scope, cwd)
     if metadata.get("trust_state", metadata.get("status")) != "trusted":
         raise HarnessError(f"Only trusted skills can be exported: {name}")
+    governance = metadata.get("governance")
+    needs_governance = metadata.get("risk_level") == "sensitive" or (
+        isinstance(governance, dict) and governance.get("criticality") in {"high", "critical"}
+    )
+    if needs_governance or governance is not None:
+        problem = _governance_problem(governance)
+        if problem:
+            raise HarnessError(
+                f"Cannot export {name}: {problem}. Run `harness govern {name} --owner ... "
+                "--criticality ... --expires YYYY-MM-DD`."
+            )
     frontmatter = _FRONTMATTER.match(body)
     description = _DESCRIPTION.search(frontmatter.group(1)) if frontmatter else None
     if not description:
@@ -614,6 +761,10 @@ def export_skill(name: str, scope: str, cwd: Path, destination: Path) -> Path:
         "harness_version": __version__,
         "source_session_count": len({value for value in source_sessions if isinstance(value, str)}),
     }
+    if isinstance(governance, dict):
+        manifest["governance"] = {
+            key: governance[key] for key in ("owner", "criticality", "expires") if key in governance
+        }
     staging = Path(tempfile.mkdtemp(prefix=f".{name}.export-", dir=destination))
     target_created = False
     try:
@@ -660,6 +811,11 @@ def verify_export(directory: Path) -> str:
     if not description:
         raise HarnessError(f"Skill description is missing from {skill_path}.")
     validate_skill(name, description.group(1).strip().strip("\"'"), body)
+    governance = manifest.get("governance")
+    if governance is not None:
+        problem = _governance_problem(governance)
+        if problem:
+            raise HarnessError(f"Skill export {name} is not currently approved for sharing: {problem}.")
     return digest
 
 

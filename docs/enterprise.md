@@ -1,8 +1,11 @@
 # Enterprise skill promotion: design
 
-Status: **organisation governance and distribution are design-only.** The local trusted-skill export
-and unsigned hash verification in phase 1 are implemented; shared-repository review, signing, and
-organisation workflows are not.
+Status: **local sharing mechanics are implemented; organisation distribution, signing and policy are
+design-only.** Implemented: trusted-skill export and unsigned hash verification, owner / criticality /
+expiry metadata (`harness govern`), a shared-repository scaffold with CI verification and review
+templates (`harness shared-init`), review-gated import and cross-scope sharing (`harness import`,
+`harness share`), and shadow evaluation (`harness shadow`). Not implemented: signing, attestation,
+organisation marketplace and policy pinning, deny lists, telemetry.
 
 ## Problem
 
@@ -58,6 +61,24 @@ pass the existing validation and secret-marker checks again at export time.
 
 ### 2. Review pipeline (CI in the shared repo)
 
+`harness shared-init <dir>` scaffolds the repository: a `verify-skills` GitHub Actions workflow that runs
+`harness verify` on every `skills/*` directory for PRs and pushes, a `CODEOWNERS` placeholder, a PR
+template with a reviewer checklist, and a README describing contribute and consume steps. Branch
+protection with required code-owner review is the real control and must be enabled by hand.
+
+`harness govern <skill> --owner ... --criticality low|medium|high|critical --expires YYYY-MM-DD`
+records ownership in the skill sidecar. Export requires complete, unexpired governance for sensitive
+or high/critical skills, writes owner, criticality and expiry into the manifest, and `harness verify`
+fails once the expiry date has passed, so CI flags stale shared skills. The manifest is unsigned, so
+these fields are advisory against a malicious editor; PR review is what protects them.
+
+Consumers run `harness import <dir>`, which re-verifies the hash and creates a *pending proposal*;
+nothing is installed until `harness accept`, and accepted skills start in probation. `harness share
+<skill> --from personal --to project` does the same across local scopes for a trusted skill.
+
+Still to build in CI: a secret scan, prompt-injection check, size limits, near-duplicate detection
+against existing shared skills, and diffs of changed skills. The planned checks are:
+
 Run on every PR: `validate_skill`; secret/redaction scan; keyword risk classifier; a prompt-injection
 check (flag instructions that mention exfiltration, disabling safeguards, fetching remote
 instructions, or overriding other skills); size limits; name collision and near-duplicate detection
@@ -65,6 +86,17 @@ against existing org skills; a diff of any change to an existing skill. Findings
 sensitive classes; they never auto-approve. `CODEOWNERS` routes security-relevant skills (deploy,
 IAM, secrets, infrastructure) to a security reviewer. The classifier is keyword-based, so humans
 remain the control, not the checks.
+
+### 2b. Shadow evaluation (`harness shadow`)
+
+Before trusting or sharing a revision, `harness shadow <skill>` replays task cases from `evals/shadow/`
+through the configured model command twice, once with the baseline (the previous saved version, a chosen
+`--baseline-version`, or no skill) and once with the candidate (the live skill, or a pending proposal via
+`--proposal`). Each answer is scored on `must_include` / `must_exclude`. A case that passed with the
+baseline and fails with the candidate is a regression and makes the command exit non-zero. It also prints
+heuristic conflict warnings (near-duplicate descriptions, opposing always/never lines against other managed
+skills). It never writes to a skill. Each case runs once, model output varies, and cases are
+hand-written, so treat a pass as evidence, not proof.
 
 ### 3. Signing and publisher authentication (not implemented)
 
@@ -118,7 +150,7 @@ aggregate counts per skill with no user or session identifiers, opt-in, document
 ## Implementation phases
 
 1. **Implemented:** trusted-skill export + privacy-minimized `provenance.json` + `harness verify` (unsigned hashes only). Local, no GitHub dependency.
-2. CI workflow template for the shared repo (checks, `CODEOWNERS`, PR template).
+2. **Implemented (basic):** CI workflow template for the shared repo (`harness shared-init`: hash verification, `CODEOWNERS`, PR template), governance metadata and review-gated import. Richer CI checks (secret scan, injection check, duplicate detection) remain.
 3. Attestation/signing in the release workflow; verification in `verify`.
 4. Org marketplace + policy pinning guide; deny list; labels in the session-start index.
 5. Optional aggregate telemetry (only if the organisation asks for it).

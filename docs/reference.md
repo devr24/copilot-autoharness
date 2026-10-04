@@ -1,4 +1,4 @@
-﻿# Copilot Harness reference
+# Copilot Harness reference
 
 Full command, configuration and behaviour reference. For the overview, see the [README](../README.md).
 
@@ -20,7 +20,7 @@ The goal is a passive learning loop: do normal engineering work with Copilot; as
 - **Avoids duplicates where possible:** the reflector sees the full compact index of Harness-owned skills (name, scope, trust, description) plus the full text of the most relevant ones, and can propose `patch` instead of `create`.
 - **Injects a skill index at session start:** the `sessionStart` hook returns `additionalContext` listing learned skills (trusted first, capped). Opt out with `[index] session_start = false`. Verified live on Copilot CLI 1.0.92: the model sees the list.
 - **Consolidates:** every 250 new tool events (and at least 3 skills in a scope) a curator reflection proposes merging near-duplicate skills. Absorbed skills are archived (not deleted, `merged_into` recorded, restorable); the kept skill returns to probation. Merges touching trusted or sensitive skills are held for `harness accept`. Run manually with `harness consolidate`.
-- **Keeps humans in control of risky knowledge:** low-risk auto-mode skills enter probation. Sensitive candidatesâ€”such as production, deployment, IAM, security, infrastructure, secrets, data migration, or destructive guidanceâ€”are held for explicit approval.
+- **Keeps humans in control of risky knowledge:** low-risk auto-mode skills enter probation. Sensitive candidates—such as production, deployment, IAM, security, infrastructure, secrets, data migration, or destructive guidance—are held for explicit approval.
 - **Protects human-owned skills:** create will not overwrite an existing skill. Patch, trust, quarantine, archive, restore, and rollback require Harness ownership metadata.
 - **Tracks provenance and versions:** each skill records its source session/events, reason, local creator, repository, Harness version, and validation result. Previous skill bodies are versioned outside Copilot's loadable skill directory and protected with SHA-256 digests.
 - **Supports recovery:** skills can be trusted, quarantined out of recall, restored, archived, or rolled back to an earlier version.
@@ -31,7 +31,7 @@ The goal is a passive learning loop: do normal engineering work with Copilot; as
 - It does not reflect after every tool event: it checks at turn end and starts reflection only after the configured threshold, then reflects on eligible remaining work at session end. Below-threshold short sessions require `harness learn --now`.
 - It does not infer whether a skill was followed or helpful. You can explicitly record local feedback with `harness feedback`, but ratings are self-reported and do not affect trust, promotion, or pruning. Copilot's `skill.invoked` transcript signal is undocumented and could change between versions.
 - It does not detect contradictory guidance beyond what the consolidation reflector notices.
-- It does not provide shadow-mode outcome evaluation, a dashboard, hosted service, team or enterprise promotion workflow (a design is in `docs/enterprise.md`), or signed corporate skills. Plugin distribution through a published marketplace is described in `docs/publishing.md`.
+- It does not provide a dashboard, hosted service, signed corporate skills, organisation marketplace or policy enforcement (a design is in `enterprise.md`). Shadow evaluation (`harness shadow`), governance metadata (`harness govern`), review-gated sharing (`harness import`, `harness share`, `harness shared-init`) are implemented locally. Plugin distribution through a published marketplace is described in `publishing.md`.
 - Sensitive-content detection is heuristic keyword classification, not semantic security review. Low-risk labels do not guarantee a skill is safe.
 
 ## Requirements
@@ -153,6 +153,12 @@ harness inspect <skill-name> [--scope project|personal]
 harness feedback <skill-name> --rating helpful|not-helpful [--scope project|personal]
 harness export <skill-name> --scope project|personal --to <directory>
 harness verify <exported-skill-directory>
+harness govern <skill-name> --owner <owner> --criticality low|medium|high|critical --expires YYYY-MM-DD [--scope project|personal]
+harness shadow <skill-name> [--scope project|personal] [--baseline-version N] [--cases <dir>]
+harness shadow --proposal <proposal-id> [--cases <dir>]
+harness import <exported-skill-directory> [--scope project|personal]
+harness share <skill-name> --from project|personal --to project|personal
+harness shared-init <directory>
 harness accept <proposal-id>
 harness reject <proposal-id>
 harness skills [--scope project|personal]
@@ -202,7 +208,22 @@ harness unquarantine build-workflow --scope project
 harness rollback build-workflow --scope project
 ```
 
-Feedback is an explicit, local-only signal attached to the current skill version. It records only the skill name, scope, version, rating, working directory, and timestampâ€”no explanation or conversation text. Ratings are shown by `harness skills`; they are not treated as proof of quality and never automatically change a skill's trust state.
+Feedback is an explicit, local-only signal attached to the current skill version. It records only the skill name, scope, version, rating, working directory, and timestamp—no explanation or conversation text. Ratings are shown by `harness skills`; they are not treated as proof of quality and never automatically change a skill's trust state.
+
+### Shadow evaluation
+
+`harness shadow <skill>` answers each task case twice through the configured model command: once with the baseline (the previous saved version, `--baseline-version N`, or no skill when the skill is at version 1 or the proposal creates a new skill) and once with the candidate (the live skill, or a pending proposal with `--proposal ID`). Cases live in `evals/shadow/*.json` (or `--cases`):
+
+```json
+{"name": "lint", "skill": "build-workflow", "task": "How should I check my change?",
+ "expect": {"must_include": ["unittest"], "must_exclude": ["--no-verify"]}}
+```
+
+`skill` is optional (omit to apply a case to every skill). A case that passes with the baseline but fails with the candidate is a regression, and the command exits 1. It also prints heuristic conflict warnings against other managed skills: near-duplicate descriptions and opposing always/never lines. It never modifies a skill. Each case runs once per side against a live model, so results vary; a pass is evidence, not proof.
+
+### Governance and sharing
+
+`harness govern` records an owner, criticality and expiry date in the skill sidecar. `harness export` requires complete, unexpired governance for sensitive or high/critical skills and copies owner, criticality and expiry into `provenance.json`. `harness verify` fails once the expiry date has passed. `harness shared-init <dir>` writes a shared-skills repository scaffold: a workflow that verifies every `skills/*` directory, a `CODEOWNERS` placeholder, a pull-request template and a README. `harness import <dir>` verifies an export and creates a pending proposal; `harness share <skill> --from S --to S` does the same between local scopes for a trusted skill. Neither installs anything until `harness accept`. The manifest is unsigned, so the governance fields are advisory against a malicious editor; pull-request review in the shared repository is the control.
 
 `harness accept` records the current local account name as the approver. Sensitive candidates are promoted only after this explicit acceptance. Low-risk proposals in `review` mode are also promoted on acceptance. Newly created and changed skills enter probation; use `harness trust` after review to mark one trusted.
 
@@ -342,11 +363,11 @@ Typical use: hooks seem not to fire, so check `harness logs` for `hook ... recei
 
 ## Roadmap and references
 
-**Current foundation:** local capture and reflection, a session-start Harness skill index, periodic consolidation, skill-load counts, explicit version-bound helpful/not-helpful feedback, provenance, trust gates, rollback and quarantine. Trusted skills can be exported with minimized provenance, then checked with `harness verify`; this verifies content integrity only, not publisher identity. `.github/workflows/ci.yml` runs the unit suite on Ubuntu, macOS and Windows with Python 3.11 and 3.13. The detached-reflection process still needs broader live cross-platform validation.
+**Current foundation:** local capture and reflection, a session-start Harness skill index, periodic consolidation, skill-load counts, explicit version-bound helpful/not-helpful feedback, shadow evaluation, provenance, trust gates, rollback and quarantine. Trusted skills can be given owner/criticality/expiry metadata, exported with minimized provenance, checked with `harness verify` (integrity and expiry only, not publisher identity), and consumed through `harness import`, which only creates a pending proposal. `harness shared-init` scaffolds a shared repository with CI verification and review templates. `.github/workflows/ci.yml` runs the unit suite on Ubuntu, macOS and Windows with Python 3.11 and 3.13. The detached-reflection process still needs broader live cross-platform validation.
 
-**Next: validate outcomes before automating trust.** Expand the replayable evaluation harness into a shadow mode that compares a candidate skill revision with its previous version on the same task cases. Report regressions and likely conflicts without changing the live skill. Use explicit feedback as a diagnostic signal, not as an automatic score or pruning trigger; skill-load records alone are not evidence of usefulness.
+**Next: harden sharing.** Richer shared-repo CI (secret scan, prompt-injection check, size limits, near-duplicate detection, diffs), more shadow cases and repeated runs per case.
 
-**After shadow evaluation: make exports reviewable and shareable.** Add a reusable CI/review template around the existing trusted-skill export and hash verification. Keep signing, organisation distribution, policy enforcement, dashboards, and any shared telemetry as later work, after the local feedback and regression loop is reliable and the governance model is defined.
+**Then: organisation rollout.** Signing and attestation, an organisation marketplace pinned by policy, a deny list, and organisation-tier labels in the session-start index. Dashboards and any shared telemetry stay later work, after the governance model is defined.
 
 Use `harness skills --unused-days N` only as a manual review aid; archiving stays explicit because Copilot's load signal is undocumented and loading does not establish value. See [the enterprise promotion design](enterprise.md) for the proposed trust tiers and sharing safeguards.
 

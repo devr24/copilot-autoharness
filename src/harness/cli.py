@@ -26,18 +26,25 @@ from .index import session_start_context
 from .reflection import learn
 from .skills import (
     export_skill,
+    import_proposal,
     inspect_skill,
     list_skills,
+    managed_skill_context,
     merge_skills,
     move_skill,
     promote,
     classify_risk,
     quarantine_skill,
+    read_version,
     restore_quarantined_skill,
     rollback_skill,
+    set_governance,
+    share_proposal,
     trust_skill,
     verify_export,
 )
+from .shadow import detect_conflicts, load_task_cases, run_shadow
+from .sharing import scaffold_shared_repo
 from .storage import Storage
 from .usage import find_unused
 from .transcript import read_skill_invocations
@@ -104,6 +111,40 @@ def _parser() -> argparse.ArgumentParser:
     export_parser.add_argument("--to", type=Path, required=True, help="Directory that will contain the exported skill.")
     verify_parser = commands.add_parser("verify", help="Verify a skill export's content hash.")
     verify_parser.add_argument("directory", type=Path, help="Exported skill directory.")
+    govern_parser = commands.add_parser(
+        "govern", help="Record owner, criticality and review expiry for a skill (required to share risky skills)."
+    )
+    govern_parser.add_argument("name")
+    govern_parser.add_argument("--scope", choices=("project", "personal"), default="project")
+    govern_parser.add_argument("--owner", required=True)
+    govern_parser.add_argument("--criticality", choices=("low", "medium", "high", "critical"), required=True)
+    govern_parser.add_argument("--expires", required=True, metavar="YYYY-MM-DD")
+    share_parser = commands.add_parser(
+        "share", help="Propose copying a trusted skill into another scope (pending human review)."
+    )
+    share_parser.add_argument("name")
+    share_parser.add_argument("--from", dest="source", choices=("project", "personal"), required=True)
+    share_parser.add_argument("--to", dest="target", choices=("project", "personal"), required=True)
+    import_parser = commands.add_parser(
+        "import", help="Verify a skill export and create a pending proposal (never installs directly)."
+    )
+    import_parser.add_argument("directory", type=Path)
+    import_parser.add_argument("--scope", choices=("project", "personal"), default="project")
+    shared_init_parser = commands.add_parser(
+        "shared-init", help="Scaffold a shared-skills repository with CI verification and review templates."
+    )
+    shared_init_parser.add_argument("directory", type=Path)
+    shadow_parser = commands.add_parser(
+        "shadow", help="Compare a skill with a baseline on task cases without changing it."
+    )
+    shadow_parser.add_argument("name", nargs="?", help="Live skill to evaluate (omit with --proposal).")
+    shadow_parser.add_argument("--scope", choices=("project", "personal"), default="project")
+    shadow_parser.add_argument("--proposal", metavar="ID", help="Evaluate a pending proposal instead of the live skill.")
+    shadow_parser.add_argument(
+        "--baseline-version", type=int, metavar="N",
+        help="Baseline is this saved version (default: the previous version, or no skill).",
+    )
+    shadow_parser.add_argument("--cases", type=Path, help="Directory of shadow case JSON files (default: evals/shadow).")
     accept_parser = commands.add_parser("accept", help="Validate and promote a proposal.")
     accept_parser.add_argument("proposal_id")
     reject_parser = commands.add_parser("reject", help="Reject a pending proposal.")
@@ -159,6 +200,54 @@ def _record_skill_uses(storage: Storage, cwd: Path, session_id: str) -> None:
     raw = storage.latest_transcript_path(session_id, str(cwd))
     if raw:
         storage.record_skill_uses(session_id, read_skill_invocations(Path(raw)))
+
+
+def _shadow(args: argparse.Namespace, config: Any, storage: Storage, cwd: Path) -> int:
+    if args.proposal:
+        proposal = storage.proposal(args.proposal)
+        if not proposal or proposal["status"] != "pending":
+            raise HarnessError(f"Pending proposal not found: {args.proposal}")
+        name, scope, candidate = proposal["name"], proposal["scope"], proposal["skill_md"]
+        baseline = None
+        if proposal["action"] == "patch":
+            baseline = inspect_skill(name, scope, cwd)[2]
+        label = f"proposal {args.proposal}"
+        baseline_label = "live skill" if baseline else "no skill"
+    else:
+        if not args.name:
+            raise HarnessError("Give a skill name or --proposal ID.")
+        name, scope = args.name, args.scope
+        _, metadata, candidate = inspect_skill(name, scope, cwd)
+        current = metadata.get("version", 1)
+        wanted = args.baseline_version if args.baseline_version is not None else current - 1
+        if args.baseline_version is not None and not 1 <= wanted < current:
+            raise HarnessError("Baseline version must be an existing version older than the current one.")
+        baseline = read_version(name, scope, cwd, wanted) if wanted >= 1 else None
+        label = f"{scope} skill {name} v{current}"
+        baseline_label = f"v{wanted}" if baseline else "no skill"
+    directory = args.cases or Path.cwd() / "evals" / "shadow"
+    if not directory.is_dir():
+        raise HarnessError(f"Shadow case directory not found: {directory}")
+    cases = load_task_cases(directory, name)
+    if not cases:
+        raise HarnessError(f"No shadow cases for {name} in {directory}. Cases need a 'task' and 'expect'.")
+    others = [s for s in managed_skill_context(cwd) if (s["scope"], s["name"]) != (scope, name)]
+    results = run_shadow(config, cases, candidate, baseline)
+    print(f"Shadow evaluation: {label} vs {baseline_label} ({len(results)} case(s), one run each; results can vary)")
+    for item in results:
+        print(
+            f"  [{item.outcome:11}] {item.name}  baseline={'pass' if item.baseline_passed else 'fail'} "
+            f"candidate={'pass' if item.candidate_passed else 'fail'}"
+        )
+        for failure in item.failures:
+            print(f"       - {failure}")
+    conflicts = detect_conflicts(candidate, others)
+    for conflict in conflicts:
+        print(f"  [{conflict.kind}] {conflict.other}: {conflict.detail}")
+    regressions = [item for item in results if item.outcome == "regression"]
+    print(f"{len(regressions)} regression(s), {sum(i.outcome == 'improvement' for i in results)} improvement(s), "
+          f"{len(conflicts)} possible conflict(s). The live skill was not changed.")
+    return 1 if regressions else 0
 
 
 def _handle(args: argparse.Namespace) -> int:
@@ -400,6 +489,27 @@ def _handle(args: argparse.Namespace) -> int:
         print(f"Content hash verified: {digest}")
         print("Note: the local hash manifest is unsigned and does not authenticate its publisher.")
         return 0
+    if args.command == "govern":
+        path = set_governance(args.name, args.scope, cwd, args.owner, args.criticality, args.expires)
+        print(f"Recorded governance for {args.scope} skill {args.name}: {path}")
+        return 0
+    if args.command in {"share", "import"}:
+        if args.command == "share":
+            proposal = share_proposal(args.name, args.source, args.target, cwd)
+        else:
+            proposal = import_proposal(args.directory, args.scope, cwd)
+        storage.add_proposal(proposal, str(cwd), datetime.now(UTC).isoformat())
+        print("Proposal created (nothing installed yet):")
+        print(_format_proposal({**proposal, "status": "pending"}))
+        print(f"Review with `harness inspect {proposal['id']} --proposal`, then `harness accept {proposal['id']}`.")
+        return 0
+    if args.command == "shared-init":
+        for path in scaffold_shared_repo(args.directory):
+            print(f"Created {path}")
+        print("Edit .github/CODEOWNERS and enable branch protection with required code-owner review.")
+        return 0
+    if args.command == "shadow":
+        return _shadow(args, config, storage, cwd)
     if args.command in {"archive", "restore"}:
         path = move_skill(args.name, args.scope, cwd, archive=args.command == "archive")
         print(f"{'Archived' if args.command == 'archive' else 'Restored'}: {path}")

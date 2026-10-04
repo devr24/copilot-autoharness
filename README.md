@@ -22,6 +22,8 @@ provenance, trust states and rollback.
 | **Keeps its own library in view** | Every session opens with an index of the skills it wrote (trusted first, capped), injected through the `sessionStart` hook. Copilot's own skill recall is left untouched. |
 | **Humans gate risky knowledge** | Low-risk skills enter *probation*. Anything touching production, deployment, IAM, secrets, data migration or destructive steps is held until you `harness accept` it. |
 | **Provenance, versions, rollback** | Every skill records its source session, reason, creator, validation result and Harness version. Previous bodies are versioned with SHA-256 digests and can be rolled back, quarantined or archived. |
+| **Validated before trusted** | `harness shadow` replays task cases against a revision and its predecessor and reports regressions and likely conflicts, without touching the live skill. |
+| **Shared through review** | Trusted skills carry an owner, criticality and expiry, export with minimised provenance, and move between teams via a CI-verified, code-owner-reviewed repository. Imports only ever create a pending proposal. |
 | **Only its own skills** | Create never overwrites; patch, trust, quarantine, archive and rollback require Harness ownership metadata. Skills you wrote or installed are never touched. |
 | **Local-first, no daemon** | State lives in a local SQLite file. Hooks start short-lived processes; there is no resident service and no telemetry. |
 
@@ -190,18 +192,36 @@ harness rollback build-workflow            # restore a saved, digest-verified bo
 **5 · The next session opens knowing.** The `sessionStart` hook injects the skill index, so the library is in
 front of the model whether or not Copilot's own recall would have surfaced it.
 
-**6 · Trust, share, retire.** After review you decide what the skill is worth.
+**6 · Validate before you trust.** Replay task cases against the new revision and its predecessor. This never
+changes the skill; it exits non-zero on a regression and warns about likely conflicts with other skills.
+
+```powershell
+harness shadow build-workflow --cases .\evals\shadow
+harness shadow --proposal <proposal-id>    # evaluate a pending proposal before accepting it
+```
+
+**7 · Trust, share, retire.** After review you decide what the skill is worth.
 
 ```powershell
 harness feedback build-workflow --rating helpful
 harness trust build-workflow --scope project
+harness govern build-workflow --owner platform-team --criticality medium --expires 2027-01-01
 harness export build-workflow --scope project --to .\shared-skills\skills
-harness verify .\shared-skills\skills\build-workflow     # integrity check, not publisher identity
+harness verify .\shared-skills\skills\build-workflow     # integrity + expiry check, not publisher identity
 harness quarantine build-workflow --reason "Investigate incorrect instruction"
 harness archive build-workflow             # reversible: harness restore build-workflow
 ```
 
-**7 · Yours are never touched.** Anything without Harness ownership metadata is invisible to the promoter and
+**8 · Share through review.** Scaffold a shared repo whose CI runs `harness verify` and whose pull requests need
+a code owner. Consumers import into a pending proposal; nothing installs until they accept it.
+
+```powershell
+harness shared-init ..\shared-skills                   # workflow, CODEOWNERS, PR template, README
+harness import ..\shared-skills\skills\build-workflow  # verifies, then creates a pending proposal
+harness share build-workflow --from personal --to project   # same review gate across local scopes
+```
+
+**9 · Yours are never touched.** Anything without Harness ownership metadata is invisible to the promoter and
 lifecycle commands.
 
 ## Commands
@@ -213,8 +233,11 @@ harness proposals [--all]                 harness inspect <name|proposal-id> [--
 harness accept|reject <proposal-id>       harness skills [--scope S] [--unused-days N]
 harness trust|quarantine|unquarantine|archive|restore|rollback <skill> [--scope S]
 harness feedback <skill> --rating helpful|not-helpful
+harness shadow <skill> | --proposal <id> [--baseline-version N] [--cases DIR]
+harness govern <skill> --owner O --criticality C --expires YYYY-MM-DD
 harness export <skill> --scope S --to <dir>        harness verify <dir>
-harness eval [--only NAME]
+harness import <dir> [--scope S]          harness share <skill> --from S --to S
+harness shared-init <dir>                 harness eval [--only NAME]
 ```
 
 Details and examples: [docs/reference.md](docs/reference.md).
@@ -226,27 +249,29 @@ Details and examples: [docs/reference.md](docs/reference.md).
 - Harness cannot tell whether a skill was *followed* or *helpful*. Load counts come from Copilot's
   undocumented `skill.invoked` transcript event and could change; ratings are self-reported and never change
   trust or prune anything.
-- Contradiction detection is limited to what the consolidation reflector notices.
+- Shadow evaluation runs each hand-written case once per side through a live model, so results vary and a
+  pass is evidence, not proof. Conflict detection is a word-overlap heuristic.
 - Sensitive-content classification is keyword-based, not a security review. Probation does not stop Copilot
   loading a skill — don't put unreviewed high-impact instructions in one.
-- Not yet available: shadow-mode outcome evaluation, organisation-wide promotion, signed skills, a
-  dashboard. The detached reflection process still needs broader live cross-platform validation.
+- Exports and governance metadata are unsigned hash manifests: they catch unreviewed edits, not a malicious
+  publisher. The pull-request review in the shared repo is the real control.
+- Not yet available: signing and attestation, organisation marketplace and policy pinning, a dashboard. The
+  detached reflection process still needs broader live cross-platform validation.
 
 ## Roadmap
 
 **Now (v0.1):** local capture and reflection, session-start index, consolidation, probation/trust gates,
-provenance, versioning, rollback, quarantine, feedback, and hash-checked export with CI on Windows, Linux
-and macOS.
+provenance, versioning, rollback, quarantine, feedback, shadow evaluation, governance metadata, hash-checked
+export/import, a shared-repo scaffold with CI verification, and CI on Windows, Linux and macOS.
 
-**Next — validate before automating trust.** A shadow mode that replays task cases against a candidate
-skill revision and its predecessor, reporting regressions and likely conflicts without touching the live
-skill.
+**Next — harden sharing.** Richer shared-repo CI (secret scan, prompt-injection check, size limits, duplicate
+detection, diffs), more shadow cases and repeated runs, and live validation of detached reflection on
+macOS and Linux.
 
-**Then — governed sharing.** A reusable CI/review template around export and verify; owners, expiry and
-criticality metadata; a reviewed, PR-based promotion path from personal to project to organisation skills.
+**Then — organisation rollout.** Signing and attestation, an organisation marketplace pinned by policy, a
+deny list, and org-tier labels in the session-start index.
 
-**Later.** Signing, organisation distribution and policy enforcement, a dashboard, and any shared telemetry —
-only once the local feedback and regression loop is reliable and the governance model is agreed.
+**Later.** A dashboard and any shared telemetry — only once the governance model is agreed.
 See the [enterprise promotion design](docs/enterprise.md).
 
 ## Documentation
