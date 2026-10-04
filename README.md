@@ -212,7 +212,8 @@ harness quarantine build-workflow --reason "Investigate incorrect instruction"
 harness archive build-workflow             # reversible: harness restore build-workflow
 ```
 
-**8 · Share through review.** Scaffold a shared repo whose CI runs `harness verify` and whose pull requests need
+**8 · Share through review.** Scaffold a shared repo whose CI runs `harness audit` (hash, expiry, secrets,
+injection phrases, size, duplicates) and whose pull requests need
 a code owner. Consumers import into a pending proposal; nothing installs until they accept it.
 
 ```powershell
@@ -237,7 +238,8 @@ harness shadow <skill> | --proposal <id> [--baseline-version N] [--cases DIR]
 harness govern <skill> --owner O --criticality C --expires YYYY-MM-DD
 harness export <skill> --scope S --to <dir>        harness verify <dir>
 harness import <dir> [--scope S]          harness share <skill> --from S --to S
-harness shared-init <dir>                 harness eval [--only NAME]
+harness shared-init <dir>                 harness audit <dir>
+harness eval [--only NAME]
 ```
 
 Details and examples: [docs/reference.md](docs/reference.md).
@@ -264,8 +266,8 @@ Details and examples: [docs/reference.md](docs/reference.md).
 provenance, versioning, rollback, quarantine, feedback, shadow evaluation, governance metadata, hash-checked
 export/import, a shared-repo scaffold with CI verification, and CI on Windows, Linux and macOS.
 
-**Next — harden sharing.** Richer shared-repo CI (secret scan, prompt-injection check, size limits, duplicate
-detection, diffs), more shadow cases and repeated runs, and live validation of detached reflection on
+**Next — harden sharing.** Diffs of changed skills in CI, catalogue collision checks, more shadow cases and
+repeated runs, and live validation of detached reflection on
 macOS and Linux.
 
 **Then — organisation rollout.** Signing and attestation, an organisation marketplace pinned by policy, a

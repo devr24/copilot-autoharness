@@ -9,6 +9,7 @@ from typing import Any
 
 from . import __version__
 from .debug import DEBUG_LOG_NAME, debug_enabled, debug_exception, debug_log, tail_debug_log
+from .audit import audit_skills
 from .background import (
     last_reflection_log,
     log_reflection,
@@ -111,6 +112,10 @@ def _parser() -> argparse.ArgumentParser:
     export_parser.add_argument("--to", type=Path, required=True, help="Directory that will contain the exported skill.")
     verify_parser = commands.add_parser("verify", help="Verify a skill export's content hash.")
     verify_parser.add_argument("directory", type=Path, help="Exported skill directory.")
+    audit_parser = commands.add_parser(
+        "audit", help="Check a directory of exported skills for tampering, secrets, injection and duplicates."
+    )
+    audit_parser.add_argument("directory", type=Path, help="Directory containing exported skill folders.")
     govern_parser = commands.add_parser(
         "govern", help="Record owner, criticality and review expiry for a skill (required to share risky skills)."
     )
@@ -489,6 +494,12 @@ def _handle(args: argparse.Namespace) -> int:
         print(f"Content hash verified: {digest}")
         print("Note: the local hash manifest is unsigned and does not authenticate its publisher.")
         return 0
+    if args.command == "audit":
+        count, findings = audit_skills(args.directory)
+        for finding in findings:
+            print(f"{finding.skill}: [{finding.check}] {finding.detail}")
+        print(f"Audited {count} skill(s): {len(findings)} finding(s).")
+        return 1 if findings else 0
     if args.command == "govern":
         path = set_governance(args.name, args.scope, cwd, args.owner, args.criticality, args.expires)
         print(f"Recorded governance for {args.scope} skill {args.name}: {path}")

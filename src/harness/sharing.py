@@ -24,16 +24,8 @@ jobs:
           python-version: "3.13"
       - name: Install harness
         run: python -m pip install "{HARNESS_SOURCE}"
-      - name: Verify every exported skill
-        run: |
-          set -e
-          shopt -s nullglob
-          count=0
-          for dir in skills/*/; do
-            harness verify "${{dir%/}}"
-            count=$((count + 1))
-          done
-          echo "Verified $count skill(s)."
+      - name: Audit skills (hash, expiry, secrets, injection, duplicates)
+        run: harness audit skills
 """
 
 _CODEOWNERS = """# Replace with the team that reviews shared skills. Enable "Require review from

@@ -203,7 +203,7 @@ class ScaffoldTests(unittest.TestCase):
             written = scaffold_shared_repo(target)
             self.assertEqual(len(written), len(FILES))
             workflow = (target / ".github" / "workflows" / "verify-skills.yml").read_text(encoding="utf-8")
-            self.assertIn('harness verify "${dir%/}"', workflow)
+            self.assertIn("harness audit skills", workflow)
             with self.assertRaisesRegex(HarnessError, "overwrite"):
                 scaffold_shared_repo(target)
 

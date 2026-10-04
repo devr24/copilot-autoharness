@@ -76,8 +76,13 @@ Consumers run `harness import <dir>`, which re-verifies the hash and creates a *
 nothing is installed until `harness accept`, and accepted skills start in probation. `harness share
 <skill> --from personal --to project` does the same across local scopes for a trusted skill.
 
-Still to build in CI: a secret scan, prompt-injection check, size limits, near-duplicate detection
-against existing shared skills, and diffs of changed skills. The planned checks are:
+`harness audit <dir>` runs these checks and exits 1 on any finding: hash/manifest verification and
+expiry, secret-like content, prompt-injection phrases (overriding instructions, revealing secrets,
+piping downloads into a shell, hiding actions from the user, bypassing review, hidden bidirectional
+characters), a 20 KB size limit, and near-duplicate descriptions between skills. The scaffolded
+workflow runs `harness audit skills`. Still to build: diffs of changed skills and name collisions
+against an existing org catalogue. The checks are heuristics, so humans remain the control. The wider
+planned checks are:
 
 Run on every PR: `validate_skill`; secret/redaction scan; keyword risk classifier; a prompt-injection
 check (flag instructions that mention exfiltration, disabling safeguards, fetching remote
@@ -150,7 +155,7 @@ aggregate counts per skill with no user or session identifiers, opt-in, document
 ## Implementation phases
 
 1. **Implemented:** trusted-skill export + privacy-minimized `provenance.json` + `harness verify` (unsigned hashes only). Local, no GitHub dependency.
-2. **Implemented (basic):** CI workflow template for the shared repo (`harness shared-init`: hash verification, `CODEOWNERS`, PR template), governance metadata and review-gated import. Richer CI checks (secret scan, injection check, duplicate detection) remain.
+2. **Implemented (basic):** CI workflow template for the shared repo (`harness shared-init`: hash verification, `CODEOWNERS`, PR template), governance metadata and review-gated import. Richer CI checks remain (diffs of changed skills, catalogue collisions).
 3. Attestation/signing in the release workflow; verification in `verify`.
 4. Org marketplace + policy pinning guide; deny list; labels in the session-start index.
 5. Optional aggregate telemetry (only if the organisation asks for it).
