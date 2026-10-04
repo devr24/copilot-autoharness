@@ -2,7 +2,7 @@
 import json
 import shutil
 import subprocess
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 from .errors import HarnessError
@@ -23,7 +23,8 @@ class Policy:
     require_governance: bool = False
     require_signature: bool = False
     allowed_signers: Path | None = None
-    problems: tuple[str, ...] = field(default=(), compare=False)
+    trusted_repo: str | None = None
+    trusted_workflow: str | None = None
 
 
 def _strings(raw: dict, key: str) -> frozenset[str]:
@@ -60,8 +61,13 @@ def load_policy(path: Path) -> Policy:
         signers_path = (path.parent / signers).resolve()
     if raw.get("require_signature") and signers_path is None:
         raise HarnessError("Policy require_signature needs allowed_signers.")
+    for key in ("trusted_repo", "trusted_workflow"):
+        if raw.get(key) is not None and not isinstance(raw[key], str):
+            raise HarnessError(f"Policy {key} must be a string.")
     return Policy(
         path=path,
+        trusted_repo=raw.get("trusted_repo"),
+        trusted_workflow=raw.get("trusted_workflow"),
         deny_names=_strings(raw, "deny_names"),
         deny_sha256=frozenset(item.lower() for item in _strings(raw, "deny_sha256")),
         allowed_owners=_strings(raw, "allowed_owners"),

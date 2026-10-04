@@ -28,6 +28,41 @@ jobs:
         run: harness audit skills
 """
 
+_RELEASE = f"""name: Release skills
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install harness
+        run: python -m pip install "{HARNESS_SOURCE}"
+      - name: Audit before releasing
+        run: harness audit skills
+      - name: Build reproducible bundle
+        run: harness bundle skills --out skills-bundle.tar.gz
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: skills-bundle.tar.gz
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{{{ github.token }}}}
+        run: gh release create "${{{{ github.ref_name }}}}" skills-bundle.tar.gz --generate-notes
+"""
+
 _CODEOWNERS = """# Replace with the team that reviews shared skills. Enable "Require review from
 # Code Owners" in branch protection so no skill merges without them.
 /skills/ @your-org/skill-reviewers
@@ -80,6 +115,11 @@ Accepted skills start in probation like any other.
 content hashes), an owner allowlist, a maximum criticality, required governance, and optional required
 signatures from the keys in `allowed_signers`. Sign with `harness sign skills/<skill> --key <ssh-key>`.
 
+Signatures prove who vouches; attestation proves how a release was built. Tag `v*` to run the release
+workflow, which audits, bundles and attests `skills-bundle.tar.gz`. Consumers set `trusted_repo` (and
+optionally `trusted_workflow`) in `harness-policy.json`, then run `harness verify-attestation
+skills-bundle.tar.gz` (needs `gh`) before extracting the bundle.
+
 ## Limits
 
 `provenance.json` is an unsigned hash manifest. It detects accidental or unreviewed edits to `SKILL.md`,
@@ -95,7 +135,9 @@ _POLICY = """{
   "max_criticality": null,
   "require_governance": false,
   "require_signature": false,
-  "allowed_signers": "allowed_signers"
+  "allowed_signers": "allowed_signers",
+  "trusted_repo": null,
+  "trusted_workflow": null
 }
 """
 
@@ -111,6 +153,7 @@ FILES = {
     "allowed_signers": _SIGNERS,
     "skills/.gitkeep": "",
     ".github/workflows/verify-skills.yml": _WORKFLOW,
+    ".github/workflows/release-skills.yml": _RELEASE,
     ".github/CODEOWNERS": _CODEOWNERS,
     ".github/PULL_REQUEST_TEMPLATE.md": _PR_TEMPLATE,
 }

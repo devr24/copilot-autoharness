@@ -10,6 +10,7 @@ from typing import Any
 from . import __version__
 from .debug import DEBUG_LOG_NAME, debug_enabled, debug_exception, debug_log, tail_debug_log
 from .audit import audit_skills
+from .attest import build_bundle, verify_attestation
 from .policy import enforce_policy, find_policy, load_policy, sign_export, verify_signature
 from .background import (
     last_reflection_log,
@@ -118,6 +119,16 @@ def _parser() -> argparse.ArgumentParser:
     )
     audit_parser.add_argument("directory", type=Path, help="Directory containing exported skill folders.")
     audit_parser.add_argument("--policy", type=Path, help="Policy file (default: harness-policy.json found in the current or parent directory).")
+    bundle_parser = commands.add_parser("bundle", help="Build a deterministic .tar.gz of a skills directory for release.")
+    bundle_parser.add_argument("directory", type=Path)
+    bundle_parser.add_argument("--out", type=Path, required=True)
+    attest_parser = commands.add_parser(
+        "verify-attestation", help="Verify a skills bundle's GitHub build-provenance attestation (needs gh)."
+    )
+    attest_parser.add_argument("bundle", type=Path)
+    attest_parser.add_argument("--repo", help="Trusted owner/name (default: trusted_repo from policy).")
+    attest_parser.add_argument("--workflow", help="Trusted signer workflow (default: trusted_workflow from policy).")
+    attest_parser.add_argument("--policy", type=Path)
     sign_parser = commands.add_parser("sign", help="Sign a skill export's provenance.json with an SSH key.")
     sign_parser.add_argument("directory", type=Path)
     sign_parser.add_argument("--key", type=Path, required=True, help="SSH private key (ssh-keygen -t ed25519).")
@@ -516,6 +527,18 @@ def _handle(args: argparse.Namespace) -> int:
     if args.command == "govern":
         path = set_governance(args.name, args.scope, cwd, args.owner, args.criticality, args.expires)
         print(f"Recorded governance for {args.scope} skill {args.name}: {path}")
+        return 0
+    if args.command == "bundle":
+        print(f"Bundle written: {build_bundle(args.directory, args.out)}")
+        return 0
+    if args.command == "verify-attestation":
+        policy_path = args.policy or find_policy(Path.cwd())
+        policy = load_policy(policy_path) if policy_path else None
+        repo = args.repo or (policy.trusted_repo if policy else None)
+        workflow = args.workflow or (policy.trusted_workflow if policy else None)
+        if not repo:
+            raise HarnessError("Pass --repo or set trusted_repo in harness-policy.json.")
+        print(f"Attestation verified: bundle built by {verify_attestation(args.bundle, repo, workflow)}")
         return 0
     if args.command == "sign":
         print(f"Signed: {sign_export(args.directory, args.key)}")

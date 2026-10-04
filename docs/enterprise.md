@@ -2,12 +2,12 @@
 
 Status: **local sharing mechanics are implemented; organisation distribution, signing and policy are
 design-only.** Implemented: trusted-skill export and hash verification, optional SSH-key signatures
-(`harness sign`), an organisation policy file (deny list, owner allowlist, criticality cap, required
+(`harness sign`), build-provenance attestation (`harness bundle`, `harness verify-attestation`), an organisation policy file (deny list, owner allowlist, criticality cap, required
 governance and signatures), owner / criticality /
 expiry metadata (`harness govern`), a shared-repository scaffold with CI verification and review
 templates (`harness shared-init`), review-gated import and cross-scope sharing (`harness import`,
-`harness share`), and shadow evaluation (`harness shadow`). Not implemented: build attestation,
-organisation marketplace, telemetry.
+`harness share`), and shadow evaluation (`harness shadow`). Not implemented: organisation marketplace,
+telemetry.
 
 ## Problem
 
@@ -93,6 +93,8 @@ with `harness verify-signature <dir> --allowed-signers <file>`; an `allowed_sign
 identities and public keys in the standard OpenSSH format. This needs OpenSSH 8.2+ `ssh-keygen` on PATH.
 Signatures prove key possession, not that the content is safe; revoke by removing a key or adding a hash
 to the deny list.
+
+**Attestation.** `harness bundle skills --out skills-bundle.tar.gz` builds a reproducible archive (sorted entries, zeroed timestamps and owners). The scaffolded `release-skills.yml` runs on `v*` tags: audit, bundle, `actions/attest-build-provenance`, then a GitHub release. Consumers pin `trusted_repo` (and optionally `trusted_workflow`) in the policy file and run `harness verify-attestation <bundle>`, which calls `gh attestation verify` so the bundle is accepted only if it was built by that repository's workflow. This proves provenance of the build, not that the content is safe, and it needs `gh` and GitHub (other CI would need Sigstore/cosign).
 
 The wider planned checks are:
 
