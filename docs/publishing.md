@@ -94,7 +94,7 @@ git push origin v0.1.0
 ```
 
 Then on GitHub: Releases → Draft a new release → choose the tag → generate notes. Describe the
-known limits (README "What it does not do yet"), the Windows-first testing history and the
+known limits (README "Limitations"), the Windows-first testing history and the
 data-handling note (conversation text is sent to the Copilot model provider for reflection).
 
 For each later release bump the version in all four places (the test enforces this), run the tests,
