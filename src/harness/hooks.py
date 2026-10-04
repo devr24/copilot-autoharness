@@ -56,11 +56,19 @@ def normalize_hook(payload: Any, event_name: str | None = None) -> Event:
     cwd = field("cwd", "cwd")
     if not isinstance(session_id, str) or not session_id.strip():
         raise HarnessError("Hook payload is missing sessionId.")
+    if not camel_case:
+        # VS Code documents cwd and timestamp as optional.
+        if not isinstance(cwd, str) or not cwd.strip():
+            cwd = os.getcwd()
+        if timestamp is None:
+            timestamp = datetime.now(tz=UTC).isoformat()
     if not isinstance(cwd, str) or not cwd.strip():
         raise HarnessError("Hook payload is missing cwd.")
     tool_name = field("toolName", "tool_name")
     tool_args = field("toolArgs", "tool_input")
     tool_result = field("toolResult", "tool_result")
+    if tool_result is None and not camel_case:
+        tool_result = payload.get("tool_response")
     error = field("error", "error")
 
     details: dict[str, Any] = {}
@@ -110,7 +118,7 @@ def handle_hook(
         raise HarnessError("Copilot hook input was not valid JSON.") from exc
     event = normalize_hook(payload, event_name=event_name)
     storage.add_event(event)
-    output: dict[str, str] = {}
+    output: dict[str, Any] = {}
     if event.event_name == "sessionStart" and context_provider is not None:
         try:
             context = context_provider(event)
@@ -118,5 +126,10 @@ def handle_hook(
             context = None
         if context:
             output["additionalContext"] = context
+            if isinstance(payload.get("hook_event_name"), str):
+                output["hookSpecificOutput"] = {
+                    "hookEventName": "SessionStart",
+                    "additionalContext": context,
+                }
     destination.write(json.dumps(output, ensure_ascii=False) + "\n")
     return event

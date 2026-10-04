@@ -95,6 +95,12 @@ delete the Harness home (`%LOCALAPPDATA%\copilot-harness\`, or `~/.local/state/c
 Harness-owned skills under `.github/skills/` and `~/.copilot/skills/` (each carries a `.sidecar.json` and
 `.ledger.jsonl`, so they are easy to tell from yours). Your own skills are never touched.
 
+### VS Code (experimental)
+
+Harness's hook command also accepts VS Code's payload format (PascalCase events, snake_case fields). To try it, install `harness` on your PATH and copy `hooks/vscode-hooks.json` to `.github/hooks/harness.json` in your workspace. Skills Harness writes to `.github/skills/` are already read by VS Code.
+
+Status: verified live in VS Code 1.138.0 on Windows (Local agent sessions): the four hooks fire, events are stored, and the session-start index is returned. Learning from a real multi-step session is not yet verified. VS Code has no session-end event, so learning is triggered by `Stop` (mid-session reflection) only.
+
 ## Configuration
 
 Settings live in `config.toml` in the Harness home (`harness config` prints the path). Defaults are

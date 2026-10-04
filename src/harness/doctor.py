@@ -32,7 +32,8 @@ def _repo_hooks_installed(cwd: Path) -> bool:
         return False
     for path in directory.glob("*.json"):
         try:
-            if '"harness"' in path.read_text(encoding="utf-8"):
+            text = path.read_text(encoding="utf-8")
+            if '"harness"' in text or "harness hook" in text:
                 return True
         except OSError:
             continue

@@ -1,0 +1,8 @@
+{
+  "hooks": {
+    "SessionStart": [{ "type": "command", "command": "harness hook", "timeout": 10 }],
+    "UserPromptSubmit": [{ "type": "command", "command": "harness hook", "timeout": 10 }],
+    "PostToolUse": [{ "type": "command", "command": "harness hook", "timeout": 10 }],
+    "Stop": [{ "type": "command", "command": "harness hook", "timeout": 30 }]
+  }
+}

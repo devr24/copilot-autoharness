@@ -70,11 +70,7 @@ def _parser() -> argparse.ArgumentParser:
     hook_parser = commands.add_parser("hook", help="Read one Copilot hook payload from stdin.")
     hook_parser.add_argument(
         "--event",
-        choices=(
-            "sessionStart", "userPromptSubmitted", "postToolUse",
-            "postToolUseFailure", "agentStop", "sessionEnd",
-        ),
-        help="Event name supplied by the hook configuration.",
+        help="Event name supplied by the hook configuration (optional when the payload names its event).",
     )
     config_parser = commands.add_parser("config", help="Inspect or initialize configuration.")
     config_parser.add_subparsers(dest="config_action").add_parser(
