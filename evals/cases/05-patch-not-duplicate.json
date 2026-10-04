@@ -1,0 +1,46 @@
+﻿{
+    "conversation":  [
+                         {
+                             "text":  "Running the tests again: set PYTHONPATH=src and use unittest discover. Also add -v so I see test names, and clean __pycache__ afterwards - please remember both.",
+                             "role":  "user"
+                         },
+                         {
+                             "text":  "Ran py -m unittest discover -s tests -v with PYTHONPATH=src, then removed __pycache__ directories.",
+                             "role":  "assistant"
+                         },
+                         {
+                             "text":  "Perfect, that is the full routine.",
+                             "role":  "user"
+                         }
+                     ],
+    "tool_events":  [
+                        {
+                            "tool":  "powershell",
+                            "details":  {
+                                            "command":  "py -m unittest discover -s tests -v"
+                                        }
+                        },
+                        {
+                            "tool":  "powershell",
+                            "details":  {
+                                            "command":  "Remove-Item __pycache__ -Recurse"
+                                        }
+                        }
+                    ],
+    "expect":  {
+                   "patch_target":  "run-tests",
+                   "action":  "patch",
+                   "must_include":  [
+                                        "__pycache__"
+                                    ]
+               },
+    "existing_skills":  [
+                            {
+                                "scope":  "project",
+                                "status":  "probation",
+                                "description":  "Run the project unit tests.",
+                                "name":  "run-tests",
+                                "content":  "---\nname: run-tests\ndescription: Run the project unit tests.\n---\n\n# run-tests\n\nSet PYTHONPATH=src and run py -m unittest discover -s tests.\n"
+                            }
+                        ]
+}

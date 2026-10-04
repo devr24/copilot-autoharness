@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "type": "command",
+        "exec": "harness",
+        "args": ["hook", "--event", "sessionStart"],
+        "timeoutSec": 10
+      }
+    ],
+    "userPromptSubmitted": [
+      {
+        "type": "command",
+        "exec": "harness",
+        "args": ["hook", "--event", "userPromptSubmitted"],
+        "timeoutSec": 10
+      }
+    ],
+    "postToolUse": [
+      {
+        "type": "command",
+        "exec": "harness",
+        "args": ["hook", "--event", "postToolUse"],
+        "timeoutSec": 10
+      }
+    ],
+    "postToolUseFailure": [
+      {
+        "type": "command",
+        "exec": "harness",
+        "args": ["hook", "--event", "postToolUseFailure"],
+        "timeoutSec": 10
+      }
+    ],
+    "agentStop": [
+      {
+        "type": "command",
+        "exec": "harness",
+        "args": ["hook", "--event", "agentStop"],
+        "timeoutSec": 10
+      }
+    ],
+    "sessionEnd": [
+      {
+        "type": "command",
+        "exec": "harness",
+        "args": ["hook", "--event", "sessionEnd"],
+        "timeoutSec": 180
+      }
+    ]
+  }
+}

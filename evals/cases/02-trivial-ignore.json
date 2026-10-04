@@ -1,0 +1,27 @@
+﻿{
+    "conversation":  [
+                         {
+                             "text":  "Rename the variable foo to bar in utils.py line 12.",
+                             "role":  "user"
+                         },
+                         {
+                             "text":  "Done, renamed foo to bar on line 12.",
+                             "role":  "assistant"
+                         },
+                         {
+                             "text":  "Thanks.",
+                             "role":  "user"
+                         }
+                     ],
+    "tool_events":  [
+                        {
+                            "tool":  "edit",
+                            "details":  {
+                                            "path":  "utils.py"
+                                        }
+                        }
+                    ],
+    "expect":  {
+                   "action":  "ignore"
+               }
+}

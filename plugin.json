@@ -1,0 +1,8 @@
+{
+  "name": "copilot-harness",
+  "description": "Passively learns reusable skills from your Copilot CLI sessions, with provenance, trust states and rollback. Requires the `harness` CLI on PATH.",
+  "version": "0.1.0",
+  "license": "MIT",
+  "keywords": ["skills", "learning", "hooks", "memory"],
+  "hooks": "hooks/hooks.json"
+}

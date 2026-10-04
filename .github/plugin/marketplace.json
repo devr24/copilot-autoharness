@@ -1,0 +1,13 @@
+{
+  "name": "copilot-harness-marketplace",
+  "owner": { "name": "Copilot Harness contributors" },
+  "metadata": { "description": "Copilot Harness: passive skill learning for Copilot CLI", "version": "0.1.0" },
+  "plugins": [
+    {
+      "name": "copilot-harness",
+      "description": "Passively learns reusable skills from your Copilot CLI sessions. Requires the harness CLI on PATH.",
+      "version": "0.1.0",
+      "source": "."
+    }
+  ]
+}

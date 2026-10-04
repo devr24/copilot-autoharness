@@ -1,0 +1,43 @@
+﻿{
+    "conversation":  [
+                         {
+                             "text":  "Tests keep failing with ModuleNotFoundError when I run pytest from the repo root.",
+                             "role":  "user"
+                         },
+                         {
+                             "text":  "Tests need PYTHONPATH=src. Running: $env:PYTHONPATH=\"src\"; py -m unittest discover -s tests",
+                             "role":  "assistant"
+                         },
+                         {
+                             "text":  "That worked. Always run tests that way in this repo, never plain pytest - I have told you this three times now.",
+                             "role":  "user"
+                         },
+                         {
+                             "text":  "Understood. I will always run tests with PYTHONPATH=src and py -m unittest discover -s tests.",
+                             "role":  "assistant"
+                         }
+                     ],
+    "tool_events":  [
+                        {
+                            "outcome":  "failure",
+                            "details":  {
+                                            "command":  "pytest"
+                                        },
+                            "tool":  "powershell"
+                        },
+                        {
+                            "tool":  "powershell",
+                            "details":  {
+                                            "command":  "$env:PYTHONPATH=\"src\"; py -m unittest discover -s tests"
+                                        }
+                        }
+                    ],
+    "expect":  {
+                   "scope":  "project",
+                   "action":  "create",
+                   "must_include":  [
+                                        "PYTHONPATH",
+                                        "unittest"
+                                    ]
+               }
+}
